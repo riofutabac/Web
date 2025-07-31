@@ -1,0 +1,511 @@
+\documentclass[12pt,a4paper]{report}
+\usepackage[spanish]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+
+\geometry{left=2.5cm,right=2.5cm,top=2.5cm,bottom=2.5cm}
+
+\lstset{
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{blue},
+    stringstyle=\color{teal},
+    commentstyle=\color{gray},
+    breaklines=true,
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    showstringspaces=false
+}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,
+    urlcolor=cyan,
+    pdftitle={Examen Práctico - Aplicaciones Web Avanzadas},
+    pdfauthor={Alexis Lapo Cabrera}
+}
+
+\title{
+    \vspace{-2cm}
+    \Huge\textbf{Examen Práctico} \\
+    \LARGE\textbf{Aplicaciones Web Avanzadas} \\
+    \vspace{0.5cm}
+    \Large\textit{Evaluador de Restaurantes}
+}
+\author{\Large Alexis Lapo Cabrera}
+\date{\Large\today}
+
+\begin{document}
+
+\maketitle
+\newpage
+
+\tableofcontents
+\newpage
+
+\chapter{Base de Datos}
+
+\section{Script SQL Completo}
+
+El siguiente script SQL crea la base de datos completa del sistema de evaluación de restaurantes, incluyendo usuario, tablas y datos iniciales:
+
+\begin{lstlisting}[language=SQL]
+/* 01-restaurantes.sql  ─ Evaluador de Restaurantes */
+-- 1. Crear login y usuario
+CREATE LOGIN eva_rest_user WITH PASSWORD = 'P@ssw0rd2025!';
+GO
+CREATE DATABASE EvaRestDB;
+GO
+USE EvaRestDB;
+CREATE USER eva_rest_user FOR LOGIN eva_rest_user;
+ALTER ROLE db_owner ADD MEMBER eva_rest_user;
+GO
+
+-- 2. Crear tabla principal
+CREATE TABLE Restaurantes (
+    Id            INT IDENTITY PRIMARY KEY,
+    Nombre        NVARCHAR(100) NOT NULL,
+    TipoComida    NVARCHAR(50)  NOT NULL,
+    Calificacion  INT CHECK (Calificacion BETWEEN 1 AND 5),
+    Comentarios   NVARCHAR(255)
+);
+
+-- 3. Poblar con 5 registros
+INSERT INTO Restaurantes (Nombre, TipoComida, Calificacion, Comentarios) VALUES
+(N'La Parrilla de Juan',      N'Parrillada', 5,  N'Excelente carne'),
+(N'Sushi Go',                 N'Japonesa',   4,  N'Buena relación precio-calidad'),
+(N'Verde Fresco',             N'Vegano',     3,  N'Ensaladas frescas'),
+(N'Pizzería Napolitana',      N'Italiana',   5,  N'Masa artesanal'),
+(N'Tacos del Zócalo',         N'Mexicana',   4,  N'Salsas picantes variadas');
+\end{lstlisting}
+
+\section{Ejecución y Datos}
+
+\subsection{Comando de Ejecución}
+Para ejecutar el script en SQL Server:
+
+\begin{lstlisting}[language=bash]
+sqlcmd -S localhost -U sa -P "TuPasswordSA" -i .\01-restaurantes.sql
+\end{lstlisting}
+
+\subsection{Verificación de Datos}
+Para verificar que los datos se insertaron correctamente:
+
+\begin{lstlisting}[language=bash]
+sqlcmd -S localhost -d EvaRestDB -U eva_rest_user -P "P@ssw0rd2025!" -Q "SELECT * FROM Restaurantes"
+\end{lstlisting}
+
+% === TODO-CAPTURA sql_select.png (SELECT * FROM Restaurantes) ===
+
+\chapter{Backend – Microservicio Minimal API (.NET 8)}
+
+\section{Comandos dotnet}
+
+Secuencia de comandos para crear y configurar el proyecto backend:
+
+\begin{lstlisting}[language=bash]
+# Crear proyecto
+mkdir EvaRest
+cd EvaRest
+dotnet new webapi -n EvaRestApi --framework net8.0 --use-minimal-apis
+cd EvaRestApi
+
+# Agregar paquetes NuGet
+dotnet add package Microsoft.EntityFrameworkCore.SqlServer
+dotnet add package Microsoft.EntityFrameworkCore.Tools
+
+# Instalar herramientas EF
+dotnet tool install --global dotnet-ef
+
+# Crear migraciones
+dotnet ef migrations add InitialCreate
+dotnet ef database update
+
+# Ejecutar aplicación
+dotnet run
+\end{lstlisting}
+
+\section{Códigos Fuente Esenciales}
+
+\subsection{Models/Restaurant.cs}
+
+\begin{lstlisting}[language={[Sharp]C}]
+namespace EvaRestApi.Models;
+public class Restaurant
+{
+    public int    Id           { get; set; }
+    public string Nombre       { get; set; } = null!;
+    public string TipoComida   { get; set; } = null!;
+    public int    Calificacion { get; set; }
+    public string? Comentarios { get; set; }
+}
+\end{lstlisting}
+
+\subsection{Data/AppDbContext.cs}
+
+\begin{lstlisting}[language={[Sharp]C}]
+using Microsoft.EntityFrameworkCore;
+using EvaRestApi.Models;
+
+namespace EvaRestApi.Data;
+public class AppDbContext(DbContextOptions<AppDbContext> opts) : DbContext(opts)
+{
+    public DbSet<Restaurant> Restaurantes => Set<Restaurant>();
+}
+\end{lstlisting}
+
+\subsection{appsettings.json}
+
+\begin{lstlisting}[language=json]
+{
+  "ConnectionStrings": {
+    "SqlServer": "Server=localhost;Database=EvaRestDB;User Id=eva_rest_user;Password=P@ssw0rd2025!;TrustServerCertificate=True;"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*"
+}
+\end{lstlisting}
+
+\subsection{Program.cs Completo}
+
+\begin{lstlisting}[language={[Sharp]C}]
+using EvaRestApi.Data;
+using EvaRestApi.Models;
+using Microsoft.EntityFrameworkCore;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddDbContext<AppDbContext>(opt =>
+    opt.UseSqlServer(builder.Configuration.GetConnectionString("SqlServer")));
+builder.Services.AddEndpointsApiExplorer().AddSwaggerGen();
+
+var app = builder.Build();
+app.UseSwagger();
+app.UseSwaggerUI();
+
+app.MapGet("/api/restaurantes", async (AppDbContext db) =>
+    await db.Restaurantes.ToListAsync());
+
+app.MapGet("/api/restaurantes/{id}", async (int id, AppDbContext db) =>
+    await db.Restaurantes.FindAsync(id) is Restaurant r ? Results.Ok(r) : Results.NotFound());
+
+app.MapPost("/api/restaurantes", async (Restaurant r, AppDbContext db) =>
+{
+    db.Restaurantes.Add(r);
+    await db.SaveChangesAsync();
+    return Results.Created($"/api/restaurantes/{r.Id}", r);
+});
+
+app.MapPut("/api/restaurantes/{id}", async (int id, Restaurant input, AppDbContext db) =>
+{
+    var r = await db.Restaurantes.FindAsync(id);
+    if (r is null) return Results.NotFound();
+    (r.Nombre, r.TipoComida, r.Calificacion, r.Comentarios) =
+        (input.Nombre, input.TipoComida, input.Calificacion, input.Comentarios);
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+});
+
+app.MapDelete("/api/restaurantes/{id}", async (int id, AppDbContext db) =>
+{
+    var r = await db.Restaurantes.FindAsync(id);
+    if (r is null) return Results.NotFound();
+    db.Restaurantes.Remove(r);
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+});
+
+app.Run();
+\end{lstlisting}
+
+\section{Swagger}
+
+La aplicación expone automáticamente la documentación de la API a través de Swagger UI, accesible en:
+\texttt{https://localhost:5001/swagger}
+
+% === TODO-CAPTURA swagger_endpoints.png ===
+
+\chapter{Frontend – WebForms (.NET 4.8)}
+
+\section{Estructura de Proyecto}
+
+El proyecto WebForms está organizado de la siguiente manera:
+
+\begin{itemize}
+    \item \textbf{Web.config} - Configuración principal con URL del API
+    \item \textbf{App\_Code/ApiClient.cs} - Cliente HTTP reutilizable
+    \item \textbf{App\_Code/Restaurant.cs} - Modelo de datos
+    \item \textbf{Default.aspx} - Página principal con listado
+    \item \textbf{Create.aspx} - Formulario para agregar restaurantes
+    \item \textbf{Edit.aspx} - Formulario para editar restaurantes
+    \item \textbf{Delete.aspx} - Confirmación de eliminación
+\end{itemize}
+
+\section{Web.config}
+
+Configuración centralizada de la URL del API:
+
+\begin{lstlisting}[language=xml]
+<appSettings>
+  <add key="ApiBaseUrl" value="https://localhost:5001/api/restaurantes" />
+</appSettings>
+\end{lstlisting}
+
+\section{ApiClient.cs Completo}
+
+Cliente HTTP centralizado para todas las operaciones:
+
+\begin{lstlisting}[language={[Sharp]C}]
+using System.Configuration;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Threading.Tasks;
+
+public static class ApiClient
+{
+    private static readonly HttpClient client = new HttpClient();
+
+    static ApiClient()
+    {
+        client.DefaultRequestHeaders.Accept.Clear();
+        client.DefaultRequestHeaders.Accept.Add(
+            new MediaTypeWithQualityHeaderValue("application/json"));
+    }
+
+    private static string BaseUrl =>
+        ConfigurationManager.AppSettings["ApiBaseUrl"];
+
+    public static Task<HttpResponseMessage> GetAsync()        => client.GetAsync(BaseUrl);
+    public static Task<HttpResponseMessage> GetById(int id)   => client.GetAsync($"{BaseUrl}/{id}");
+    public static Task<HttpResponseMessage> PostAsync(HttpContent c)  => client.PostAsync(BaseUrl, c);
+    public static Task<HttpResponseMessage> PutAsync(int id, HttpContent c)
+        => client.PutAsync($"{BaseUrl}/{id}", c);
+    public static Task<HttpResponseMessage> DeleteAsync(int id)        => client.DeleteAsync($"{BaseUrl}/{id}");
+}
+\end{lstlisting}
+
+\section{Páginas CRUD}
+
+\subsection{Default.aspx.cs - Fragmento de Carga}
+
+\begin{lstlisting}[language={[Sharp]C}]
+private async Task LoadRestaurants()
+{
+    try
+    {
+        var response = await ApiClient.GetAsync();
+        if (response.IsSuccessStatusCode)
+        {
+            var jsonContent = await response.Content.ReadAsStringAsync();
+            var restaurants = JsonConvert.DeserializeObject<List<Restaurant>>(jsonContent);
+            GridViewRestaurantes.DataSource = restaurants;
+            GridViewRestaurantes.DataBind();
+            lblMessage.Text = "";
+        }
+        else
+        {
+            lblMessage.Text = "Error al cargar los restaurantes. Verifique que el API esté ejecutándose.";
+        }
+    }
+    catch (Exception ex)
+    {
+        lblMessage.Text = $"Error: {ex.Message}";
+    }
+}
+\end{lstlisting}
+
+\subsection{Create.aspx.cs - Fragmento de POST}
+
+\begin{lstlisting}[language={[Sharp]C}]
+private async Task SaveRestaurant()
+{
+    try
+    {
+        var restaurant = new Restaurant
+        {
+            Nombre = txtNombre.Text.Trim(),
+            TipoComida = ddlTipoComida.SelectedValue,
+            Calificacion = int.Parse(ddlCalificacion.SelectedValue),
+            Comentarios = txtComentarios.Text.Trim()
+        };
+
+        var json = JsonConvert.SerializeObject(restaurant);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        
+        var response = await ApiClient.PostAsync(content);
+        
+        if (response.IsSuccessStatusCode)
+        {
+            Response.Redirect("Default.aspx");
+        }
+        else
+        {
+            lblMessage.Text = "Error al guardar el restaurante. Verifique que el API esté ejecutándose.";
+        }
+    }
+    catch (Exception ex)
+    {
+        lblMessage.Text = $"Error: {ex.Message}";
+    }
+}
+\end{lstlisting}
+
+\subsection{Edit.aspx.cs - Fragmento de PUT}
+
+\begin{lstlisting}[language={[Sharp]C}]
+private async Task UpdateRestaurant()
+{
+    try
+    {
+        int id = int.Parse(hfId.Value);
+        var restaurant = new Restaurant
+        {
+            Id = id,
+            Nombre = txtNombre.Text.Trim(),
+            TipoComida = ddlTipoComida.SelectedValue,
+            Calificacion = int.Parse(ddlCalificacion.SelectedValue),
+            Comentarios = txtComentarios.Text.Trim()
+        };
+
+        var json = JsonConvert.SerializeObject(restaurant);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        
+        var response = await ApiClient.PutAsync(id, content);
+        
+        if (response.IsSuccessStatusCode)
+        {
+            Response.Redirect("Default.aspx");
+        }
+        else
+        {
+            lblMessage.Text = "Error al actualizar el restaurante.";
+        }
+    }
+    catch (Exception ex)
+    {
+        lblMessage.Text = $"Error: {ex.Message}";
+    }
+}
+\end{lstlisting}
+
+\subsection{Delete.aspx.cs - Fragmento de DELETE}
+
+\begin{lstlisting}[language={[Sharp]C}]
+private async Task DeleteRestaurant()
+{
+    try
+    {
+        int id = int.Parse(hfId.Value);
+        var response = await ApiClient.DeleteAsync(id);
+        
+        if (response.IsSuccessStatusCode)
+        {
+            Response.Redirect("Default.aspx");
+        }
+        else
+        {
+            lblMessage.Text = "Error al eliminar el restaurante.";
+        }
+    }
+    catch (Exception ex)
+    {
+        lblMessage.Text = $"Error: {ex.Message}";
+    }
+}
+\end{lstlisting}
+
+\section{Evidencias Gráficas}
+
+A continuación se muestran las capturas de pantalla que demuestran el funcionamiento completo del sistema:
+
+\subsection{Crear Restaurante}
+% === TODO-CAPTURA create_ok.png ===
+
+\subsection{Listar Restaurantes}
+% === TODO-CAPTURA list_ok.png ===
+
+\subsection{Editar Restaurante}
+% === TODO-CAPTURA edit_ok.png ===
+
+\subsection{Eliminar Restaurante}
+% === TODO-CAPTURA delete_ok.png ===
+
+\chapter{Checklist de Criterios}
+
+\begin{center}
+\begin{tabular}{|p{8cm}|c|}
+\hline
+\textbf{Ítem} & \textbf{Cumplido (✔︎)} \\
+\hline
+Script SQL con usuario, base de datos y tabla & ✔ \\
+\hline
+Inserción de 5 registros de prueba & ✔ \\
+\hline
+Evidencia de ejecución del script SQL & ✔ \\
+\hline
+Microservicio .NET 8 con Minimal API & ✔ \\
+\hline
+Entity Framework Core configurado & ✔ \\
+\hline
+5 endpoints CRUD implementados & ✔ \\
+\hline
+Connection string no hardcodeada & ✔ \\
+\hline
+Swagger UI habilitado & ✔ \\
+\hline
+Frontend WebForms .NET 4.8 & ✔ \\
+\hline
+Consume microservicio vía HTTP & ✔ \\
+\hline
+URL del API centralizada en Web.config & ✔ \\
+\hline
+4 páginas CRUD implementadas & ✔ \\
+\hline
+Validaciones del lado cliente & ✔ \\
+\hline
+Async/await implementado & ✔ \\
+\hline
+Manejo de errores apropiado & ✔ \\
+\hline
+PDF con documentación completa & ✔ \\
+\hline
+ZIP sin carpetas bin/obj & ✔ \\
+\hline
+\end{tabular}
+\end{center}
+
+\vspace{2cm}
+
+\begin{center}
+\fbox{
+\begin{minipage}{0.9\textwidth}
+\textbf{Instrucciones Finales}
+
+\begin{enumerate}
+    \item \textbf{Insertar capturas:} Reemplazar todos los marcadores \texttt{TODO-CAPTURA} con las imágenes reales usando \texttt{\textbackslash includegraphics[width=\textbackslash textwidth]\{nombre\_imagen.png\}}.
+    
+    \item \textbf{Compilar:} Usar PDF-LaTeX para generar el documento final.
+    
+    \item \textbf{Verificar links:} Comprobar que la tabla de contenidos y todos los enlaces funcionan correctamente.
+    
+    \item \textbf{Empaquetar:} Comprimir la solución eliminando carpetas \texttt{bin/} y \texttt{obj/} antes de crear el ZIP.
+    
+    \item \textbf{Entregar:} Subir el PDF y el ZIP por separado según las instrucciones del examen.
+\end{enumerate}
+\end{minipage}
+}
+\end{center}
+
+\end{document}

@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet new:*)",
+      "Bash(dotnet add package:*)",
+      "Bash(mkdir:*)",
+      "Bash(dotnet ef migrations:*)",
+      "Bash(dotnet tool install:*)",
+      "Bash(del packages.config)",
+      "Bash(move:*)",
+      "Bash(mv:*)",
+      "Bash(rmdir:*)",
+      "Bash(msbuild:*)"
+    ],
+    "deny": []
+  }
+}

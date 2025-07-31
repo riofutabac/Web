@@ -1,0 +1,6 @@
+@EvaRestApi_HostAddress = http://localhost:5230
+
+GET {{EvaRestApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
